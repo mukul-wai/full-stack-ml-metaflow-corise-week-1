@@ -18,7 +18,7 @@ class BaselineNLPFlow(FlowSpec):
     split_size = Parameter('split-sz', default=0.2)
     # In order to use a file as an input parameter for a particular Flow we can use IncludeFile
     # More information can be found here https://docs.metaflow.org/api/flowspec#includefile
-    data = IncludeFile('data', default='../data/Womens Clothing E-Commerce Reviews.csv')
+    data = IncludeFile('data', default="/home/workspace/workspaces/full-stack-ml-metaflow-corise-week-1/data/Womens Clothing E-Commerce Reviews.csv")
 
     @step
     def start(self):
@@ -29,6 +29,8 @@ class BaselineNLPFlow(FlowSpec):
         import io 
         from sklearn.model_selection import train_test_split
         
+        # load dataset packaged with the flow.
+        # this technique is convenient when working with small datasets that need to move to remove tasks.
         df = pd.read_csv(io.StringIO(self.data))
 
         # filter down to reviews and labels 
@@ -44,6 +46,7 @@ class BaselineNLPFlow(FlowSpec):
         self.df = pd.DataFrame({'label': labels, **_has_review_df})
         del df
         del _has_review_df
+
         # split the data 80/20, or by using the flow's split-sz CLI argument
         _df = pd.DataFrame({'review': reviews, 'label': labels})
         self.traindf, self.valdf = train_test_split(_df, test_size=self.split_size)
@@ -52,3 +55,45 @@ class BaselineNLPFlow(FlowSpec):
 
         self.next(self.baseline)
 
+    @step
+    def baseline(self):
+        "Compute the baseline"
+        
+        ### TODO: Fit and score a baseline model on the data, log the acc and rocauc as artifacts.
+        self.valdf["pred_label_baseline"] = 1
+        self.valdf["pred_proba_baseline"] = 0.8
+
+        self.base_acc = accuracy_score(self.valdf["label"], self.valdf["pred_label_baseline"])
+        self.base_rocauc = roc_auc_score(self.valdf["label"], self.valdf["pred_proba_baseline"])
+
+        self.next(self.end)
+        
+    @card(type='corise') # TODO: after you get the flow working, chain link on the left side nav to open your card!
+    @step
+
+    def end(self):
+
+        msg = 'Baseline Accuracy: {}\nBaseline AUC: {}'
+        print(msg.format(
+            round(self.base_acc,3), round(self.base_rocauc,3)
+        ))
+
+        current.card.append(Markdown("# Womens Clothing Review Results"))
+        current.card.append(Markdown("## Overall Accuracy"))
+        current.card.append(Artifact(self.base_acc))
+
+        current.card.append(Markdown("## Examples of False Positives"))
+        # TODO: compute the false positive predictions where the baseline is 1 and the valdf label is 0. 
+        self.fp_df = self.valdf[(self.valdf['label'] == 0) & (self.valdf['pred_label_baseline'] == 1)]
+        # TODO: display the false_positives dataframe using metaflow.cards
+        current.card.append(Table.from_dataframe(self.fp_df))
+        # Documentation: https://docs.metaflow.org/api/cards#table
+        
+        current.card.append(Markdown("## Examples of False Negatives"))
+        # TODO: compute the false negative predictions where the baseline is 0 and the valdf label is 1.
+        self.fn_df = self.valdf[(self.valdf['label'] == 1) & (self.valdf['pred_label_baseline'] == 0)] 
+        # TODO: display the false_negatives dataframe using metaflow.cards
+        current.card.append(Table.from_dataframe(self.fn_df))
+
+if __name__ == '__main__':
+    BaselineNLPFlow()
