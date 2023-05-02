@@ -1,1 +1,1 @@
-# full-stack-ml-metaflow-corise-week-1
+# full-stack-ml-metaflow-corise
